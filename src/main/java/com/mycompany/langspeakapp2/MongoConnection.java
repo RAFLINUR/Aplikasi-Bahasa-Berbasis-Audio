@@ -1,19 +1,11 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
 package com.mycompany.langspeakapp2;
 
-/**
- *
- * @author ACER
- */
 import com.mongodb.client.*;
+import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.Sorts;
 import org.bson.Document;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 public class MongoConnection {
 
@@ -44,10 +36,11 @@ public class MongoConnection {
                 .append("skor", skor)
                 .append("timestamp", System.currentTimeMillis());
         collection.insertOne(doc);
+        System.out.println("✅ Skor berhasil disimpan ke MongoDB.");
     }
 
     /**
-     * Mengambil semua data progress
+     * Mengambil semua data progress (tanpa filter)
      *
      * @return daftar dokumen progress
      */
@@ -61,9 +54,57 @@ public class MongoConnection {
     }
 
     /**
-     * Menutup koneksi ke MongoDB
+     * Mendapatkan skor terakhir untuk tiap latihan user
+     *
+     * @param username nama user
+     * @return map namaLatihan → skorTerakhir
+     */
+    public Map<String, Integer> getLatestProgressPerLatihan(String username) {
+        Map<String, Integer> latestScores = new HashMap<>();
+
+        // Ambil semua latihan unik
+        List<String> latihanList = collection.distinct("latihan", Filters.eq("user", username), String.class).into(new ArrayList<>());
+
+        for (String latihan : latihanList) {
+            Document doc = collection.find(
+                    Filters.and(Filters.eq("user", username), Filters.eq("latihan", latihan))
+            ).sort(Sorts.descending("timestamp")).limit(1).first();
+
+            if (doc != null) {
+                latestScores.put(latihan, doc.getInteger("skor", 0));
+            }
+        }
+
+        return latestScores;
+    }
+
+    /**
+     * Menutup koneksi MongoDB
      */
     public void close() {
         mongoClient.close();
+    }
+
+    // -------------------- CONTOH PENGGUNAAN --------------------
+    public static void main(String[] args) {
+        MongoConnection mongo = new MongoConnection();
+
+        // Simpan data
+        mongo.insertProgress("rafli123", "Perkenalan Diri", 85);
+        mongo.insertProgress("rafli123", "Menyebutkan Hari", 92);
+
+        // Ambil semua data
+        List<Document> all = mongo.getAllProgress();
+        for (Document doc : all) {
+            System.out.println(doc.toJson());
+        }
+
+        // Ambil skor terakhir per latihan
+        Map<String, Integer> skorTerakhir = mongo.getLatestProgressPerLatihan("rafli123");
+        System.out.println("Skor Terakhir:");
+        skorTerakhir.forEach((latihan, skor) ->
+                System.out.println(" - " + latihan + ": " + skor));
+
+        mongo.close();
     }
 }
